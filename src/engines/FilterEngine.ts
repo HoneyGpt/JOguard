@@ -1,4 +1,5 @@
 import { adEngine } from './AdEngine';
+import { ruleEngine } from './RuleEngine';
 
 /**
  * Filter Engine
@@ -14,7 +15,7 @@ export class FilterEngine {
    * Fast-path: Inject cosmetic stylesheet into webpage head immediately.
    */
   public injectCosmeticStyles(): void {
-    if (this.styleElement && document.head.contains(this.styleElement)) {
+    if (this.styleElement && document.head?.contains(this.styleElement)) {
       return;
     }
 
@@ -42,20 +43,20 @@ export class FilterEngine {
 
     requestAnimationFrame(() => {
       let removedCount = 0;
-      const selectors = adEngine.generateCosmeticStylesheet();
+      const selectors = ruleEngine.getCosmeticSelectors();
 
-      if (selectors) {
-        // Query elements currently matching cosmetic selectors
-        const elements = document.querySelectorAll(
-          '#dfp-ad-container, .ad-container, .ad-banner, .ad-slot, .ad-unit, [id^="div-gpt-ad"], [aria-label="advertisement"], [aria-label="Sponsored"]'
-        );
-
-        elements.forEach((el) => {
-          if (el && el.parentNode) {
-            el.remove();
-            removedCount++;
-          }
-        });
+      if (selectors.length > 0) {
+        try {
+          const elements = document.querySelectorAll(selectors.join(', '));
+          elements.forEach((el) => {
+            if (el && el.parentNode) {
+              el.remove();
+              removedCount++;
+            }
+          });
+        } catch (err) {
+          console.error('FilterEngine.scanAndRemoveAdElements querySelectorAll error:', err);
+        }
       }
 
       this.isScanning = false;

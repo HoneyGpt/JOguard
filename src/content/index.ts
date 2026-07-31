@@ -102,13 +102,6 @@ class ContentScriptController {
   }
 }
 
-// Instantiate content script controller when DOM starts loading
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    const controller = new ContentScriptController();
-    controller.init();
-  });
-} else {
-  const controller = new ContentScriptController();
-  controller.init();
-}
+// Instantiate and initialize content script controller immediately at document_start
+const controller = new ContentScriptController();
+controller.init();

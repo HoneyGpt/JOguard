@@ -4,6 +4,7 @@ import { badgeService } from '../services/badgeService';
 import { tabService } from '../services/tabService';
 import { statisticsEngine } from './StatisticsEngine';
 import { ruleEngine } from './RuleEngine';
+import { extractDomain, isInternalUrl } from '../utils/domainUtils';
 
 /**
  * Message Engine
@@ -13,7 +14,8 @@ import { ruleEngine } from './RuleEngine';
  */
 export class MessageEngine {
   public async handleMessage(
-    message: ChromeMessage
+    message: ChromeMessage,
+    sender?: chrome.runtime.MessageSender
   ): Promise<ChromeMessageResponse> {
     if (!message || !message.action) {
       return { success: false, error: 'Invalid message contract' };
@@ -80,38 +82,38 @@ export class MessageEngine {
         }
 
         case 'GET_CURRENT_TAB_STATUS': {
-          const tab = await tabService.getActiveTab();
           const settings = await storageService.getSettings();
           const whitelist = await storageService.getWhitelist();
 
-          if (!tab) {
-            return {
-              success: true,
-              data: {
-                tabId: 0,
-                url: '',
-                domain: '',
-                isWhitelisted: false,
-                isProtected: settings.protectionEnabled,
-                isInternal: false,
-                adsBlockedOnTab: 0,
-                trackersBlockedOnTab: 0,
-              },
-            };
+          // Prefer sender.tab if available (sent from Content Script)
+          let tabId = sender?.tab?.id || 0;
+          let url = sender?.tab?.url || '';
+          let domain = extractDomain(url);
+          let isInternal = isInternalUrl(url);
+
+          // Fallback to active window tab if not sent from a tab (e.g. Popup)
+          if (!url) {
+            const activeTab = await tabService.getActiveTab();
+            if (activeTab) {
+              tabId = activeTab.tabId;
+              url = activeTab.url;
+              domain = activeTab.domain;
+              isInternal = activeTab.isInternal;
+            }
           }
 
-          const isWhitelisted = ruleEngine.isWhitelisted(tab.domain, whitelist.map((w) => w.domain));
-          const isProtected = settings.protectionEnabled && !isWhitelisted && !tab.isInternal;
+          const isWhitelisted = domain ? ruleEngine.isWhitelisted(domain, whitelist.map((w) => w.domain)) : false;
+          const isProtected = settings.protectionEnabled && !isWhitelisted && !isInternal;
 
           return {
             success: true,
             data: {
-              tabId: tab.tabId,
-              url: tab.url,
-              domain: tab.domain,
+              tabId,
+              url,
+              domain,
               isWhitelisted,
               isProtected,
-              isInternal: tab.isInternal,
+              isInternal,
               adsBlockedOnTab: 0,
               trackersBlockedOnTab: 0,
             },

@@ -33,11 +33,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.runtime.onMessage.addListener(
   (
     message: ChromeMessage,
-    _sender: chrome.runtime.MessageSender,
+    sender: chrome.runtime.MessageSender,
     sendResponse: (response?: unknown) => void
   ) => {
     messageEngine
-      .handleMessage(message)
+      .handleMessage(message, sender)
       .then((res) => sendResponse(res))
       .catch((err) => sendResponse({ success: false, error: String(err) }));
 
