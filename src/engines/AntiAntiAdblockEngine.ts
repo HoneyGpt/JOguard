@@ -1,8 +1,8 @@
 /**
- * Anti-Anti-Adblock Engine - Version 2.0
+ * Anti-Anti-Adblock Engine
  * 
  * Detects anti-adblock overlays, paywall backdrops, and body scroll locks,
- * restoring original webpage scrollability, pointer events, and keyboard focus.
+ * restoring original webpage scrollability without triggering re-renders.
  */
 export class AntiAntiAdblockEngine {
   private antiAdblockSelectors = [
@@ -15,12 +15,10 @@ export class AntiAntiAdblockEngine {
     '[id*="adblock-wall"]',
     '[class*="anti-adblock"]',
     '[id*="anti-adblock"]',
-    '.tp-backdrop',
-    '.tp-modal',
   ];
 
   /**
-   * Scans DOM for anti-adblock overlays and restores page scrollability and pointer events.
+   * Scans DOM for anti-adblock overlays and restores page scrollability.
    * Returns count of removed anti-adblock elements.
    */
   public bypassAntiAdblockOverlays(rootDocument: Document): number {
@@ -37,30 +35,23 @@ export class AntiAntiAdblockEngine {
           removedCount++;
         });
       } catch {
-        // Ignore selector errors
+        // Ignore invalid CSS selector errors
       }
     }
 
-    // 2. Unlock scroll, pointer events, and blur filters on body/html
+    // 2. Unlock scroll if page locked body/html overflow
     const body = rootDocument.body;
     const html = rootDocument.documentElement;
 
     if (body) {
-      const computed = getComputedStyle(body);
-      if (computed.overflow === 'hidden') {
+      if (getComputedStyle(body).overflow === 'hidden') {
         body.style.setProperty('overflow', 'auto', 'important');
-      }
-      if (computed.pointerEvents === 'none') {
-        body.style.setProperty('pointer-events', 'auto', 'important');
-      }
-      if (computed.filter && computed.filter.includes('blur')) {
-        body.style.setProperty('filter', 'none', 'important');
+        body.style.setProperty('position', 'static', 'important');
       }
     }
 
     if (html) {
-      const computed = getComputedStyle(html);
-      if (computed.overflow === 'hidden') {
+      if (getComputedStyle(html).overflow === 'hidden') {
         html.style.setProperty('overflow', 'auto', 'important');
       }
     }

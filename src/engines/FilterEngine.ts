@@ -1,25 +1,22 @@
 import { adEngine } from './AdEngine';
 import { cosmeticEngine } from './CosmeticEngine';
-import { domainOptimizerEngine } from './DomainOptimizerEngine';
 
 /**
- * Filter Engine - Version 2.0
+ * Filter Engine - Version 1.1
  * 
- * High-performance DOM cosmetic filtering engine running inside Content Script.
- * Features:
- * - Duplicate-safe early CSS injection into documentElement or head.
- * - WeakSet element memory cache to prevent duplicate node scans.
- * - DomainOptimizerEngine integration for YouTube, ZEE5, news, and social platforms.
+ * High-performance DOM cosmetic filtering engine running inside the Content Script.
+ * Uses CSS injection for zero-latency initial hide + requestAnimationFrame batched
+ * multi-signal inspection via CosmeticEngine.
  */
 export class FilterEngine {
+  private styleElement: HTMLStyleElement | null = null;
   private isScanning = false;
-  private processedNodes = new WeakSet<Node>();
 
   /**
-   * Fast-path: Inject cosmetic stylesheet immediately into document.head or document.documentElement.
+   * Fast-path: Inject cosmetic stylesheet into webpage head immediately.
    */
   public injectCosmeticStyles(): void {
-    if (document.getElementById('joguard-cosmetic-rules')) {
+    if (this.styleElement && document.head.contains(this.styleElement)) {
       return;
     }
 
@@ -33,12 +30,13 @@ export class FilterEngine {
     const target = document.head || document.documentElement;
     if (target) {
       target.appendChild(style);
+      this.styleElement = style;
     }
   }
 
   /**
    * Scans document DOM tree and removes hidden ad elements directly to save memory.
-   * Uses requestAnimationFrame to avoid blocking main UI thread and WeakSet cache.
+   * Uses requestAnimationFrame to avoid blocking main UI thread.
    */
   public scanAndRemoveAdElements(
     onAdRemoved?: (count: number) => void,
@@ -57,20 +55,14 @@ export class FilterEngine {
       );
 
       elements.forEach((el) => {
-        if (!this.processedNodes.has(el)) {
-          this.processedNodes.add(el);
-          if (el && el.parentNode) {
-            el.remove();
-            removedCount++;
-          }
+        if (el && el.parentNode) {
+          el.remove();
+          removedCount++;
         }
       });
 
       // 2. Advanced Multi-Signal Native & Hardcoded Ad Removal via CosmeticEngine
       removedCount += cosmeticEngine.inspectAndRemove(document, debugLogs, domain);
-
-      // 3. Domain-Specific Handler Removal (YouTube, ZEE5, Eenadu, News, Social)
-      removedCount += domainOptimizerEngine.optimizeDomain(domain || window.location.hostname);
 
       this.isScanning = false;
       if (removedCount > 0 && onAdRemoved) {
@@ -83,9 +75,9 @@ export class FilterEngine {
    * Cleanup method to remove injected styles when protection is disabled.
    */
   public removeCosmeticStyles(): void {
-    const existing = document.getElementById('joguard-cosmetic-rules');
-    if (existing && existing.parentNode) {
-      existing.remove();
+    if (this.styleElement && this.styleElement.parentNode) {
+      this.styleElement.remove();
+      this.styleElement = null;
     }
   }
 }

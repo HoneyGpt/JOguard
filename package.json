@@ -1,6 +1,6 @@
 {
   "name": "joguard-chrome-extension",
-  "version": "2.0.0",
+  "version": "1.1.0",
   "description": "JOGuard - Protect Your Browsing. Quietly. Modern privacy, ad-blocking, and security browser extension platform.",
   "type": "module",
   "scripts": {
