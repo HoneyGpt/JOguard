@@ -1,12 +1,10 @@
 import { adEngine } from './AdEngine';
-import { cosmeticEngine } from './CosmeticEngine';
 
 /**
- * Filter Engine - Version 1.1
+ * Filter Engine
  * 
  * High-performance DOM cosmetic filtering engine running inside the Content Script.
- * Uses CSS injection for zero-latency initial hide + requestAnimationFrame batched
- * multi-signal inspection via CosmeticEngine.
+ * Uses CSS injection for zero-latency initial hide + throttled DOM scanning.
  */
 export class FilterEngine {
   private styleElement: HTMLStyleElement | null = null;
@@ -38,31 +36,27 @@ export class FilterEngine {
    * Scans document DOM tree and removes hidden ad elements directly to save memory.
    * Uses requestAnimationFrame to avoid blocking main UI thread.
    */
-  public scanAndRemoveAdElements(
-    onAdRemoved?: (count: number) => void,
-    debugLogs: boolean = false,
-    domain: string = ''
-  ): void {
+  public scanAndRemoveAdElements(onAdRemoved?: (count: number) => void): void {
     if (this.isScanning) return;
     this.isScanning = true;
 
     requestAnimationFrame(() => {
       let removedCount = 0;
+      const selectors = adEngine.generateCosmeticStylesheet();
 
-      // 1. Basic Cosmetic Removal
-      const elements = document.querySelectorAll(
-        '#dfp-ad-container, .ad-container, .ad-banner, .ad-slot, .ad-unit, [id^="div-gpt-ad"], [aria-label="advertisement"], [aria-label="Sponsored"]'
-      );
+      if (selectors) {
+        // Query elements currently matching cosmetic selectors
+        const elements = document.querySelectorAll(
+          '#dfp-ad-container, .ad-container, .ad-banner, .ad-slot, .ad-unit, [id^="div-gpt-ad"], [aria-label="advertisement"], [aria-label="Sponsored"]'
+        );
 
-      elements.forEach((el) => {
-        if (el && el.parentNode) {
-          el.remove();
-          removedCount++;
-        }
-      });
-
-      // 2. Advanced Multi-Signal Native & Hardcoded Ad Removal via CosmeticEngine
-      removedCount += cosmeticEngine.inspectAndRemove(document, debugLogs, domain);
+        elements.forEach((el) => {
+          if (el && el.parentNode) {
+            el.remove();
+            removedCount++;
+          }
+        });
+      }
 
       this.isScanning = false;
       if (removedCount > 0 && onAdRemoved) {

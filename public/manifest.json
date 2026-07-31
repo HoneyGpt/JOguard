@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "JOGuard - Privacy & Ad Protection",
   "short_name": "JOGuard",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "Protect your browsing. Quietly. Enterprise-grade ad blocking, tracker protection, and page speed optimization.",
   "permissions": [
     "storage",

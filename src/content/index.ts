@@ -2,19 +2,16 @@ import { filterEngine } from '../engines/FilterEngine';
 import { antiAntiAdblockEngine } from '../engines/AntiAntiAdblockEngine';
 import { messagingService } from '../services/messagingService';
 import { extractDomain } from '../utils/domainUtils';
-import { ExtensionSettings } from '../types';
 
 /**
- * JOGuard Content Script Entry Point - Version 1.1
+ * JOGuard Content Script Entry Point
  * 
  * Injected into web pages at document_start. Manages cosmetic element hiding,
- * CosmeticEngine multi-signal native ad removal, throttled MutationObserver DOM scanning,
- * anti-adblock bypass, and reports stats.
+ * dynamic MutationObserver DOM scanning, anti-adblock bypass, and reports stats.
  */
 class ContentScriptController {
   private currentDomain = '';
   private isProtectionActive = false;
-  private debugLogs = false;
   private observer: MutationObserver | null = null;
   private debounceTimer: number | null = null;
 
@@ -23,20 +20,16 @@ class ContentScriptController {
     if (!this.currentDomain) return;
 
     // Fetch active tab status & settings from Background Service Worker
-    const [tabResponse, settingsResponse] = await Promise.all([
-      messagingService.sendMessage<{ isProtected: boolean; isWhitelisted: boolean }>('GET_CURRENT_TAB_STATUS'),
-      messagingService.sendMessage<ExtensionSettings>('GET_SETTINGS'),
-    ]);
+    const response = await messagingService.sendMessage<{
+      isProtected: boolean;
+      isWhitelisted: boolean;
+    }>('GET_CURRENT_TAB_STATUS');
 
-    if (!tabResponse.success || !tabResponse.data) {
+    if (!response.success || !response.data) {
       return;
     }
 
-    if (settingsResponse.success && settingsResponse.data) {
-      this.debugLogs = Boolean(settingsResponse.data.debugLogs);
-    }
-
-    const { isProtected, isWhitelisted } = tabResponse.data;
+    const { isProtected, isWhitelisted } = response.data;
     if (!isProtected || isWhitelisted) {
       // Whitelisted or Protection Paused — do not hide elements
       return;
@@ -47,14 +40,10 @@ class ContentScriptController {
     // 1. Immediate Cosmetic CSS Style Injection (Zero-latency visual hide)
     filterEngine.injectCosmeticStyles();
 
-    // 2. Perform initial DOM ad element & native ad cleanup
-    filterEngine.scanAndRemoveAdElements(
-      (removedCount) => {
-        this.reportBlockEvents(removedCount, 0, `Blocked ${removedCount} ad elements`);
-      },
-      this.debugLogs,
-      this.currentDomain
-    );
+    // 2. Perform initial DOM ad element cleanup
+    filterEngine.scanAndRemoveAdElements((removedCount) => {
+      this.reportBlockEvents(removedCount, 0, `Blocked ${removedCount} ad elements`);
+    });
 
     // 3. Bypass Anti-Adblock Overlays if present
     const antiAdblockRemoved = antiAntiAdblockEngine.bypassAntiAdblockOverlays(document);
@@ -86,13 +75,9 @@ class ContentScriptController {
       this.debounceTimer = window.setTimeout(() => {
         if (!this.isProtectionActive) return;
 
-        filterEngine.scanAndRemoveAdElements(
-          (removedCount) => {
-            this.reportBlockEvents(removedCount, 0, `Removed ${removedCount} dynamic ad elements`);
-          },
-          this.debugLogs,
-          this.currentDomain
-        );
+        filterEngine.scanAndRemoveAdElements((removedCount) => {
+          this.reportBlockEvents(removedCount, 0, `Removed ${removedCount} dynamic ad elements`);
+        });
 
         antiAntiAdblockEngine.bypassAntiAdblockOverlays(document);
       }, 250);
