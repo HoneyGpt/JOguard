@@ -1,7 +1,7 @@
 /**
- * Modular Cosmetic Filtering Rule Definitions
+ * Modular Cosmetic Filtering Rule Definitions - Version 2.0
  * 
- * Defines CSS selectors targeting ad banners, sponsored containers,
+ * Expanded CSS selectors targeting ad banners, sponsored containers,
  * sticky video overlay ads, native sponsored cards, and promo popups.
  */
 
@@ -21,15 +21,20 @@ export const COSMETIC_AD_SELECTORS: string[] = [
   '.sponsored-content',
   '.promoted-item',
   '.promoted-content',
+  '.native-ad',
+  '.article-sponsored',
+  '.partner-box',
+  '.sidebar-ad',
+  '.bottom-ad-bar',
+  '.floating-ad-banner',
 
   // Common Ad Network Selectors & Attributes
   '[id^="div-gpt-ad"]',
   '[id^="google_ads_iframe"]',
   '[id^="taboola-"]',
   '[id^="outbrain-"]',
-  '[aria-label="advertisement"]',
-  '[aria-label="Advertisement"]',
-  '[aria-label="Sponsored"]',
+  '[aria-label="advertisement" i]',
+  '[aria-label="sponsored" i]',
   '[data-ad-client]',
   '[data-ad-slot]',
   '[data-adunit]',
@@ -41,6 +46,13 @@ export const COSMETIC_AD_SELECTORS: string[] = [
   '.video-ad-overlay',
   '.outstream-ad-box',
   '.interstitial-ad-backdrop',
+
+  // News & Social Domain Specific Additions
+  'ytd-ad-slot-renderer',
+  'shreddit-ad-post',
+  '.eenadu-ad',
+  '.ad-widget',
+  '.outbrain_widget_container',
 ];
 
 export const COSMETIC_CSS_HIDE_RULE = `

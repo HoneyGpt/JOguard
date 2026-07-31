@@ -2,68 +2,126 @@ import { filterEngine } from '../engines/FilterEngine';
 import { antiAntiAdblockEngine } from '../engines/AntiAntiAdblockEngine';
 import { messagingService } from '../services/messagingService';
 import { extractDomain } from '../utils/domainUtils';
+import { ExtensionSettings } from '../types';
 
 /**
- * JOGuard Content Script Entry Point
+ * JOGuard Content Script Entry Point - Version 2.0
  * 
- * Injected into web pages at document_start. Manages cosmetic element hiding,
- * dynamic MutationObserver DOM scanning, anti-adblock bypass, and reports stats.
+ * Executed immediately at document_start. Manages instant zero-latency CSS injection,
+ * SPA navigation listeners (YouTube, Zee5, social), WeakSet MutationObserver,
+ * and background stats reporting.
  */
 class ContentScriptController {
   private currentDomain = '';
   private isProtectionActive = false;
+  private debugLogs = false;
   private observer: MutationObserver | null = null;
   private debounceTimer: number | null = null;
+  private lastUrl = '';
 
   public async init(): Promise<void> {
     this.currentDomain = extractDomain(window.location.href);
+    this.lastUrl = window.location.href;
     if (!this.currentDomain) return;
 
-    // Fetch active tab status & settings from Background Service Worker
-    const response = await messagingService.sendMessage<{
-      isProtected: boolean;
-      isWhitelisted: boolean;
-    }>('GET_CURRENT_TAB_STATUS');
+    // 1. Instant CSS Injection at document_start (Zero-latency visual hide before initial render)
+    filterEngine.injectCosmeticStyles();
 
-    if (!response.success || !response.data) {
+    // 2. Fetch active tab status & settings asynchronously
+    const [tabResponse, settingsResponse] = await Promise.all([
+      messagingService.sendMessage<{ isProtected: boolean; isWhitelisted: boolean }>('GET_CURRENT_TAB_STATUS'),
+      messagingService.sendMessage<ExtensionSettings>('GET_SETTINGS'),
+    ]);
+
+    if (!tabResponse.success || !tabResponse.data) {
       return;
     }
 
-    const { isProtected, isWhitelisted } = response.data;
+    if (settingsResponse.success && settingsResponse.data) {
+      this.debugLogs = Boolean(settingsResponse.data.debugLogs);
+    }
+
+    const { isProtected, isWhitelisted } = tabResponse.data;
     if (!isProtected || isWhitelisted) {
-      // Whitelisted or Protection Paused — do not hide elements
+      // Whitelisted or Protection Paused — remove early injected CSS
+      filterEngine.removeCosmeticStyles();
       return;
     }
 
     this.isProtectionActive = true;
 
-    // 1. Immediate Cosmetic CSS Style Injection (Zero-latency visual hide)
-    filterEngine.injectCosmeticStyles();
+    // 3. Perform initial DOM ad element & native ad cleanup
+    filterEngine.scanAndRemoveAdElements(
+      (removedCount) => {
+        this.reportBlockEvents(removedCount, 0, `Blocked ${removedCount} ad elements`);
+      },
+      this.debugLogs,
+      this.currentDomain
+    );
 
-    // 2. Perform initial DOM ad element cleanup
-    filterEngine.scanAndRemoveAdElements((removedCount) => {
-      this.reportBlockEvents(removedCount, 0, `Blocked ${removedCount} ad elements`);
-    });
-
-    // 3. Bypass Anti-Adblock Overlays if present
+    // 4. Bypass Anti-Adblock Overlays if present
     const antiAdblockRemoved = antiAntiAdblockEngine.bypassAntiAdblockOverlays(document);
     if (antiAdblockRemoved > 0) {
       this.reportBlockEvents(0, 0, `Bypassed ${antiAdblockRemoved} anti-adblock overlays`);
     }
 
-    // 4. Setup Throttled MutationObserver for dynamically loaded ads
+    // 5. Setup Throttled MutationObserver & SPA Navigation Listeners
     this.setupDynamicMutationObserver();
+    this.setupSPANavigationListeners();
   }
 
   /**
-   * Sets up MutationObserver with debounced callback to prevent UI thread blocking
-   * and avoid scanning whole DOM repeatedly.
+   * SPA Navigation Interceptor (YouTube, Zee5, News, Social SPA routers)
+   */
+  private setupSPANavigationListeners(): void {
+    // 1. YouTube & Custom Event Listeners
+    const spaEvents = ['yt-navigate-finish', 'yt-navigate-start', 'yt-page-data-updated', 'popstate'];
+    spaEvents.forEach((evt) => {
+      window.addEventListener(evt, () => this.handleNavigationEvent());
+    });
+
+    // 2. History PushState / ReplaceState Interception
+    const originalPushState = history.pushState;
+    if (originalPushState) {
+      history.pushState = (...args) => {
+        originalPushState.apply(history, args);
+        this.handleNavigationEvent();
+      };
+    }
+
+    // 3. Lightweight URL Poller Backup
+    setInterval(() => {
+      if (window.location.href !== this.lastUrl) {
+        this.lastUrl = window.location.href;
+        this.handleNavigationEvent();
+      }
+    }, 1000);
+  }
+
+  private handleNavigationEvent(): void {
+    if (!this.isProtectionActive) return;
+
+    filterEngine.injectCosmeticStyles();
+    filterEngine.scanAndRemoveAdElements(
+      (removedCount) => {
+        this.reportBlockEvents(removedCount, 0, `Removed ${removedCount} ads on SPA navigation`);
+      },
+      this.debugLogs,
+      this.currentDomain
+    );
+    antiAntiAdblockEngine.bypassAntiAdblockOverlays(document);
+  }
+
+  /**
+   * Sets up MutationObserver with debounced callback to prevent UI thread blocking.
    */
   private setupDynamicMutationObserver(): void {
-    if (this.observer || !document.body) return;
+    if (this.observer) return;
+
+    const targetNode = document.body || document.documentElement;
+    if (!targetNode) return;
 
     this.observer = new MutationObserver((mutations) => {
-      // Check if added nodes contain potential ad wrappers before firing full scan
       const hasRelevantNodes = mutations.some((m) => m.addedNodes && m.addedNodes.length > 0);
       if (!hasRelevantNodes) return;
 
@@ -71,19 +129,22 @@ class ContentScriptController {
         window.clearTimeout(this.debounceTimer);
       }
 
-      // Debounce scan calls by 250ms to aggregate DOM batch updates
       this.debounceTimer = window.setTimeout(() => {
         if (!this.isProtectionActive) return;
 
-        filterEngine.scanAndRemoveAdElements((removedCount) => {
-          this.reportBlockEvents(removedCount, 0, `Removed ${removedCount} dynamic ad elements`);
-        });
+        filterEngine.scanAndRemoveAdElements(
+          (removedCount) => {
+            this.reportBlockEvents(removedCount, 0, `Removed ${removedCount} dynamic ad elements`);
+          },
+          this.debugLogs,
+          this.currentDomain
+        );
 
         antiAntiAdblockEngine.bypassAntiAdblockOverlays(document);
-      }, 250);
+      }, 150);
     });
 
-    this.observer.observe(document.body, {
+    this.observer.observe(targetNode, {
       childList: true,
       subtree: true,
     });
@@ -102,13 +163,6 @@ class ContentScriptController {
   }
 }
 
-// Instantiate content script controller when DOM starts loading
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    const controller = new ContentScriptController();
-    controller.init();
-  });
-} else {
-  const controller = new ContentScriptController();
-  controller.init();
-}
+// Immediate execution at document_start (No DOMContentLoaded delay!)
+const controller = new ContentScriptController();
+controller.init();
