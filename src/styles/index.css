@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    @apply bg-warm-50 text-warm-900 dark:bg-warm-900 dark:text-warm-50 antialiased selection:bg-terracotta-500/20 selection:text-terracotta-600;
+  }
+}
+
+@layer components {
+  /* Claude-inspired Glassmorphic Rounded Cards */
+  .glass-card {
+    @apply bg-white/80 dark:bg-warm-800/80 backdrop-blur-md border border-warm-200/70 dark:border-warm-700/60 rounded-20 shadow-warm-sm transition-all duration-200;
+  }
+  
+  .glass-card-hover {
+    @apply glass-card hover:shadow-warm-md hover:border-terracotta-500/30 dark:hover:border-terracotta-500/30;
+  }
+
+  /* Custom Warm Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-warm-300 dark:bg-warm-700 rounded-full hover:bg-warm-400 dark:hover:bg-warm-600;
+  }
+}
